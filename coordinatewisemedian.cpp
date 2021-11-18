@@ -370,6 +370,48 @@ func (t *SimpleAsset) Init(ctx contractapi.TransactionContextInterface, NodeA st
 
 }
 
+int select(int *a, int s, int e, int k){
+    // if the partition length is less than or equal to 5
+    // we can sort and find the kth element of it
+    // this way we can find the median of n/5 partitions
+    int middle = numberOfNodes/2;
+    if(e-s+1 <= middle){
+        sort(a+s, a+e);
+        return s+k-1;
+    }
+    
+    // if array is bigger 
+    // we partition the array in subarrays of size 5
+    // no. of partitions = n/5 = (e+1)/5
+    // iterate through each partition
+    // and recursively calculate the median of all of them
+    // and keep putting the medians in the starting of the array
+    for(int i=0; i<(e+1)/middle; i++){
+        int left = middle*i;
+        int right = left + (middle - 1);
+        if(right > e) right = e;
+        int median = select(a, middle*i, middle*(i+(middle-1)), 3);
+        swap(a[median], a[i]);
+    }
+    
+    // now we have array 
+    // a[0] = median of 1st 5 sized partition
+    // a[1] = median of 2nd 5 sized partition
+    // and so on till n/5
+    // to find out the median of these n/5 medians
+    // we need to select the n/10th element of this set (i.e. middle of it)
+    return select(a, 0, (e+1)/middle, (e+1)/numberOfNodes);
+}
+
+int main(){
+    int a[] = {6,7,8,1,2,3,4,5,9,10};
+    int n = 10;
+    
+    int mom = select(a, 0, n-1, n/2);
+    cout<<"Median of Medians: " << a[mom] << endl;
+    return 0;
+}
+
 
 func (t *SimpleAsset) Invoke(ctx contractapi.TransactionContextInterface, NodeNames [] string, ResultNodeName string, beg int, end int) error {
 	// Extract the function and args from the transaction proposal
@@ -434,13 +476,13 @@ func (t *SimpleAsset) Invoke(ctx contractapi.TransactionContextInterface, NodeNa
               var finalParameter float64 = 0.0
 
                 //For each worker node
+		float64 values[] = new float64[];
                 for nodeNumber := 0; nodeNumber < numberOfNodes; nodeNumber++ {
-                  finalParameter = finalParameter + batch[nodeNumber].Parameters[i]
-                  //TRACE LOG
-                  //fmt.Printf("aggregateParameter after & with node %d : %f\n", nodeNumber, finalParameter)
+                  values[nodeNumber] = batch[nodeNumber].Parameters[i]
                 }
+		 int medianofmedians = select(a, 0, numberOfNodes-1, numberOfNodes/2)
                 // END of for each worker node || aggregateParameter is addition of all the bits
-                finalParameter = finalParameter / float64(numberOfNodes)
+                finalParameter = values[medianofmedians];
                    //TRACE LOG
                    //fmt.Printf("Final Number : %f\n", finalParameter)
               //END of For each Bit of the 64 bit Parameter || finalMajorityUINT64Parameter is the majority

@@ -331,241 +331,216 @@ std::string printprivatekey(int mod_size, int exp_size, const unsigned char *p_r
 	return test;
 }
 
-
-
-//Tester function
-std::string retrieveBid(std::string bid_name, shim_ctx_ptr_t ctx)
-{
-    	LOG_DEBUG(" +++ retrieveBid +++");
-	uint32_t bid_bytes_len = -1;
-	char _unencrypted_bid[128];
-	const char* unencrypted_bid;
-
-	get_state(bid_name.c_str(), (uint8_t*)_unencrypted_bid, sizeof(_unencrypted_bid) - 1, &bid_bytes_len, ctx);
-
-	_unencrypted_bid[bid_bytes_len + 1] = '\0';
-	unencrypted_bid = _unencrypted_bid;
-	std::string result(unencrypted_bid);
-	int length = result.length();
-	result = result.substr(0, length-1);
-	return result;
+type Payload struct {
+	Parameters []float64
 }
 
-//Tester function
-std::string retrieveUsernames(shim_ctx_ptr_t ctx) {
-	
-	std::string returnUsernames = "";
-	for (int i = 0; i < user_count; i++) {
-		returnUsernames = returnUsernames + usernames[i];
+type Metadata struct {
+        Subparty []string
+}
+
+
+// Init is called during chaincode instantiation to initialize any
+// data. Note that chaincode upgrade also calls this function to reset
+// or to migrate data.
+func (t *SimpleAsset) Init(ctx contractapi.TransactionContextInterface, NodeA string, NodeAParameters[] float64) error {
+
+ 
+	fmt.Printf("NodeAParameters = %s", NodeAParameters)
+	// Write the state to the ledger
+
+        NodeAPayloadJson := Payload{
+		Parameters: NodeAParameters,
 	}
-	return returnUsernames;
 
-}
-//Tester function
-std::string asmTest(shim_ctx_ptr_t ctx)
-{
-	int finalres;
-  
-	std::string retString = "";
-	float valx, valy;
-	valx = 3.0;
-	valy = 25.0;
-   	
-	int vala = (int)valx;
-	int valb = (int)valy;
+        NodeASubparty := []string {NodeA+"0"}
+        NodeAMetadataJson := Metadata{
+                Subparty: NodeASubparty,
+        }
+	NodeAPayload, err := json.Marshal(NodeAPayloadJson)
+        NodeAMetadata, err := json.Marshal(NodeAMetadataJson)
+	err = ctx.GetStub().PutState(NodeAMetadataJson.Subparty[0], NodeAPayload)
+        err = ctx.GetStub().PutState(NodeA, NodeAMetadata)
+        if err != nil {
+          return err
+        }
 
-	asm(
-        "FLDS %1 \n"
-        "FLDS %2 \n"
-	"movl %3, %%eax;"
-	"movl %4, %%ebx;"
-        "FUCOMI %%st(1), %%st \n"
-	"cmovb %%eax, %%ebx;"
-	"movl %%ebx, %0;"
-	"clc;"
-        : "=r"(finalres)
-        : "m"(valx), "m"(valy), "g"(vala), "g"(valb)
-        :
-        );
-
-	retString = retString + std::to_string(finalres);
-
-    	return retString;
+	return nil
 
 }
 
-// Initializor function
 
-std::string clearRecord(shim_ctx_ptr_t ctx)
-{
-	std::pair<std::string, int> BIDDERMAX, BIDDERSECONDMAX;
-        BIDDERMAX.first = "nobody";
-        BIDDERMAX.second = 0;
-	BIDDERSECONDMAX.first = "nobody2";
-        BIDDERSECONDMAX.second = 0;
-        record[0] = BIDDERMAX;
-	record[1] = BIDDERSECONDMAX;
+func (t *SimpleAsset) Invoke(ctx contractapi.TransactionContextInterface, NodeNames [] string, ResultNodeName string, beg int, end int) error {
+	// Extract the function and args from the transaction proposal
+        //var err error
+        var ResultParameters []float64
+        ResultParameters = make([]float64, 4687500, 4687500)
+        ResultParameters = nil
+        
+        allNodesMetadata := []Metadata{}
+        allNodesMetadata = make([]Metadata, 10, 10)
+        allNodesMetadata = nil
 
-	return "initialization complete";
-		
+        //STORE METADATA
+        for i := 0; i < len(NodeNames) ; i++ {
+          NodeMetadataBytes, err := ctx.GetStub().GetState(NodeNames[i])
+          //fmt.Printf("NodeMetadataBytes: %b\n\n", NodeMetadataBytes )
+          if err != nil {
+                return fmt.Errorf("Failed to get state")
+          }
+          CurrentNodeMetadata := new(Metadata)
+          _ = json.Unmarshal(NodeMetadataBytes, CurrentNodeMetadata)
+          allNodesMetadata = append(allNodesMetadata, *CurrentNodeMetadata)
+        }
+
+        //GET NUMBER OF WORKER NODES
+        numberOfNodes := len(allNodesMetadata)
+        fmt.Printf("Number of nodes: %d\n\n", numberOfNodes)
+
+        if len(allNodesMetadata[0].Subparty) == len(allNodesMetadata[1].Subparty) {
+ 
+          var ResultSubparties []string
+          ResultSubparties = make([]string, 4687500, 4687500)
+          ResultSubparties = nil
+          if (beg != 0) {
+            ResultNodeMetadataBytes, err := ctx.GetStub().GetState(ResultNodeName)
+            if err != nil {
+                return fmt.Errorf("Failed to get state")
+            }
+            CurrentResultNodeMetadata := new(Metadata) 
+            _ = json.Unmarshal(ResultNodeMetadataBytes, CurrentResultNodeMetadata)
+            ResultSubparties = append(ResultSubparties, CurrentResultNodeMetadata.Subparty...)
+          }
+
+          //FOR EACH BATCH OF INPUTS
+          for batchNumber := beg; batchNumber < end ; batchNumber++ {
+            var batch []Payload
+            batch = make([]Payload, 10, 10)
+            batch = nil
+
+            for nodeNumber := 0; nodeNumber < numberOfNodes; nodeNumber++ {
+              Avalbytes, err := ctx.GetStub().GetState(allNodesMetadata[nodeNumber].Subparty[batchNumber])
+              if err != nil {
+                return fmt.Errorf("Failed to get state")
+              }
+              tempBatchbytes := new(Payload)
+              _ = json.Unmarshal(Avalbytes, tempBatchbytes)
+              batch = append(batch, *tempBatchbytes)
+            }
+
+            //For each 8 bit Parameter in a Batch
+            for i := 0; i < len(batch[0].Parameters) ; i++ {
+              var finalParameter float64 = 0.0
+
+                //For each worker node
+                for nodeNumber := 0; nodeNumber < numberOfNodes; nodeNumber++ {
+                  finalParameter = finalParameter + batch[nodeNumber].Parameters[i]
+                  //TRACE LOG
+                  //fmt.Printf("aggregateParameter after & with node %d : %f\n", nodeNumber, finalParameter)
+                }
+                // END of for each worker node || aggregateParameter is addition of all the bits
+                finalParameter = finalParameter / float64(numberOfNodes)
+                   //TRACE LOG
+                   //fmt.Printf("Final Number : %f\n", finalParameter)
+              //END of For each Bit of the 64 bit Parameter || finalMajorityUINT64Parameter is the majority
+              //fmt.Printf("Final Number : %f\n", finalParameter)
+              ResultParameters = append(ResultParameters, finalParameter)
+              //fmt.Printf("length of ResultParameters[%d] : %b",i,ResultParameters[i])
+              //fmt.Printf("Subparty: %d",batchNumber)
+            }
+            //END of For each 64 bit Parameter in a Batch || finalMajorityUINT64Parameter is loaded into ResultParameters
+
+            CurrentResultSubparty := []string {ResultNodeName + strconv.Itoa(batchNumber)}
+            ResultNodePayloadJson := Payload{
+                Parameters: ResultParameters,
+            }
+            ResultNodePayload, err := json.Marshal(ResultNodePayloadJson)
+            if err != nil {
+                 fmt.Println("error:", err)
+            }
+            ResultSubparties = append(ResultSubparties, CurrentResultSubparty...)
+            err = ctx.GetStub().PutState(CurrentResultSubparty[0], ResultNodePayload)
+            ResultParameters = nil
+          }
+          //END of for each Batch of Inputs || Batches of Parameters are loaded
+
+          ResultNodeMetadataJson := Metadata{
+                Subparty: ResultSubparties,
+          }
+          ResultNodeMetadata, err := json.Marshal(ResultNodeMetadataJson)
+          err = ctx.GetStub().PutState(ResultNodeName, ResultNodeMetadata)
+          if err != nil {
+                 fmt.Println("error:", err)
+          }
+        }
+        return nil
 }
 
-// Reset the auction
-std::string resetAuction(shim_ctx_ptr_t ctx)
-{
-	std::pair<std::string, int> BIDDER;
-        BIDDER.first = "nobody";
-        BIDDER.second = 0;
-	for (int i = 0; i < user_count; i++) {
-		bids[i] = BIDDER;
-	}
-	user_count = 0;
-	return "auction is reset";
+
+
+
+std::string setParameters(shim_ctx_ptr_t ctx, std::string NodeName , float64 NodeParameters[]) {
+
+
+        // Get the state from the ledger
+        NodeMetadataBytes, err = ctx.GetStub().GetState(NodeName)
+        if err != nil {
+          return err
+        }
+
+        if NodeMetadataBytes == nil {
+
+                NodePayloadJson = Payload{
+                       Parameters: NodeParameters,
+                }
+
+                NodeBaseSubparty = []string {NodeName+"0"}
+                NodeMetadataJson = Metadata{
+                       Subparty: NodeBaseSubparty, 
+                }
+                NodePayload, err = json.Marshal(NodePayloadJson)
+                NodeMetadata, err = json.Marshal(NodeMetadataJson)
+
+                err = ctx.GetStub().PutState(NodeMetadataJson.Subparty[0], NodePayload)
+                err = ctx.GetStub().PutState(NodeName, NodeMetadata)
+
+                if err != nil {
+                        return err
+                }
+        } else {
+            CurrentNodeMetadata = new(Metadata)
+            _ = json.Unmarshal(NodeMetadataBytes, CurrentNodeMetadata)
+
+            var Subparties []string
+            Subparties = make([]string, 4687500, 4687500)
+            Subparties = CurrentNodeMetadata.Subparty
+            SubpartyIndex = len(Subparties)
+            CurrentSubparty = []string {NodeName + strconv.Itoa(SubpartyIndex)}
+            Subparties = append(Subparties, CurrentSubparty...)
+
+	    // Write the state to the ledger
+
+            NodeMetadataJson = Metadata{
+	    	Subparty: Subparties,
+	    }
+
+            NodePayloadJson = Payload{
+                       Parameters: NodeParameters,
+            }
+	    NodeMetadata, err = json.Marshal(NodeMetadataJson)
+            NodePayload, err = json.Marshal(NodePayloadJson)
+
+	    err = ctx.GetStub().PutState(NodeName, NodeMetadata)
+            err = ctx.GetStub().PutState(CurrentSubparty[0], NodePayload)
+	    if err != nil {
+		return err
+	    }
+       }
+	return nil
 }
 
-// Shower function
-std::string showRecord(shim_ctx_ptr_t ctx)
-{
-	std::string returnstatus = "";
-	std::pair<std::string, int> BIDDERMAX, BIDDERSECONDMAX;
-	BIDDERMAX = record[0];
-        BIDDERSECONDMAX = record[1];
-
-	returnstatus = returnstatus + BIDDERMAX.first;
-	returnstatus = returnstatus + std::to_string(BIDDERMAX.second);
-	returnstatus = returnstatus + BIDDERSECONDMAX.first;
-	returnstatus = returnstatus + std::to_string(BIDDERSECONDMAX.second);
-
-	return returnstatus;
-}
 
 
-std::map<int, std::pair<std::string, int>> oblivious(int value, std::string bidder)
-{
-	std::pair<std::string, int> BIDDER, BIDDERMAX, BIDDERSECONDMAX;
-	BIDDER.first = bidder;
-        BIDDER.second = value;
-
-	BIDDERMAX = record[0];
-	BIDDERSECONDMAX = record[1];
-
-	int max, secondmax;
-	int biddermaxid=1;
-
-	std::map <int, std::string> bidderlist;
-	bidderlist[BIDDERMAX.second] = BIDDERMAX.first;
-	bidderlist[BIDDERSECONDMAX.second] = BIDDERSECONDMAX.first;
-	bidderlist[value] = bidder;
-
-
-	/* Replace by asm
-	* if(value > BIDDERMAX.second) {
-	*	record[1] = record[0];
-	*	record[0] = BIDDER;
-	* } else if((value < BIDDERMAX.second) && (value > BIDDERSECONDMAX.second)) {
-	*	record[1] = BIDDER;
-	*}
-	*/
-	
-	
-	//The replacement
-	// eax = value to test
-	// ebx = global maximum
-	// compare eax and ebx, return max if carry flag is set
-	// finally ecx will hold either a 0 or 1 value identifying the max bidder
-
-	asm(
-	"clc \n"
-	"movl %%eax, %1 \n"      
-	"movl %%ebx, %2 \n"      
-	"cmp %%ebx, %%eax \n"    
-	"cmovb %%ebx, %%eax \n"  
-	"movl %0, %%ebx \n"
-	: "=r"(max)
-	: "a"(value), "b"(BIDDERMAX.second)
-	);
-
-	// eax = maximum from previous asm block
-	// ebx = global maximum
-	// ecx = global second maximum
-	// edx = value to test
-	// compare eax and ebx, if not equal then secondmax(ecx) = global maximum(ebx)
-	// But, what if eax and ebx are equal? This means that value could be greater than global second maximum. 
-	// Therefore, compare edx and ecx, if edx > ecx, make secondmax = value    ... (1)
-
-	asm(
-	"clc \n"
-	"movl %1, %%eax \n"
-	"movl %2, %%ebx \n"
-	"movl %3, %%ecx \n"
-	"movl %4, %%edx \n"
-	"cmp %%eax, %%ebx \n"
-	"cmovne %%ebx, %%ecx \n"
-	"clc \n"
-	"cmp %%edx, %%ecx \n"
-	"cmovb %%edx, %%ecx \n"
-	"movl %%ecx, %0 \n"
-	: "=r"(secondmax)
-	: "g"(max), "g"(BIDDERMAX.second), "g"(BIDDERSECONDMAX.second), "g"(value)
-	);
-
-
-	// This is an edge case due to the last comparison in the previous asm block (1).
-	// The last comparsion in the above asm block ALWAYS happens. So, if value > max, then maximum becomes value. But, due to the previous comparison, second max also becomes value
-	// Therefore, here we compare max and the secondmax. If both are equal, then secondmax will be the global maximum value. 
-
-	asm(
-	"clc \n"
-	"movl %1, %%eax \n"
-	"movl %2, %%ebx \n"
-	"movl %3, %%ecx \n"
-	"cmp %%eax, %%ebx \n"
-	"cmove %%ecx, %%ebx \n"
-	"movl %%ebx, %0 \n"
-	: "=r"(secondmax)
-	:"g"(max), "g"(secondmax), "g"(BIDDERMAX.second)
-	);
-	
-
-	BIDDERMAX.second = max;
-	BIDDERMAX.first = bidderlist[BIDDERMAX.second];
-
-	BIDDERSECONDMAX.first = "";
-	BIDDERSECONDMAX.second = secondmax;
-
-	record[0] = BIDDERMAX;
-	record[1] = BIDDERSECONDMAX;
-
-	return record;
-
-}
-
-int maximum(int bid1, int bid2) {
-
-	int returnvalue = 0;
-	
-	asm(
-	"clc \n"
-	"movl %1, %%eax \n"
-	"movl %2, %%ebx \n"
-	"movl $0, %%ecx \n"
-	"movl $0, %%edx \n"
-	"cmp %%ebx, %%eax \n"
-	"adc %%ecx, %%edx \n"
-	"movl %0, %%edx"
-	: "=d"(returnvalue)
-	: "g"(bid1), "g"(bid2)
-	);
-
-	return returnvalue;
-
-	//if (bid1 > bid2) {
-	//	return 0;
-	//} else
-	//{
-	//	return 1;
-	//}
-}
 
 
 void *private_key = NULL;
@@ -915,27 +890,6 @@ int invoke(
     {
 	result = asmTest(ctx);
     }
-    else if (function_name == "clearRecord")
-    {
-	result = clearRecord(ctx);
-    }
-    else if (function_name == "resetAuction")
-    {
-        result = resetAuction(ctx);
-    }
-    else if (function_name == "showRecord")
-    {
-	result = showRecord(ctx);
-    }
-    else if (function_name == "retrieveBid")
-    {
-	std::string user_name = params[0];
-	result = retrieveBid(user_name, ctx);
-    }
-    else if (function_name == "retrieveUsernames")
-    {
-	result = retrieveUsernames(ctx);
-    }
     else if (function_name == "storeBid")
     {
 	std::string user_name = params[0];
@@ -947,40 +901,6 @@ int invoke(
 	std::string user_name = params[0];
 	std::string value = params[1];
 	result = storeBidMethodB(user_name, value, ctx);
-    }
-    else if (function_name == "retrieveAuctionResultFirstPrice")
-    {
-        result = retrieveAuctionResultFirstPrice(ctx);
-    }
-    else if (function_name == "retrieveAuctionResultSecondPrice")
-    {
-        result = retrieveAuctionResultSecondPrice(ctx);
-    }
-    else if (function_name == "retrieveAuctionResultMethodB")
-    {
-        result = retrieveAuctionResultMethodB(ctx);
-    }
-    else if (function_name == "decryptMessage")
-    {
-	std::string encryptedmessage = params[0];
-	result = decryptMessage(encryptedmessage, ctx);
-    }
-    else if (function_name == "encryptMessage")
-    {
-        std::string message = params[0];
-        result = encryptMessage(message, ctx);
-    }
-    else if (function_name == "createKeys")
-    {
-	result = createKeys(ctx);
-    }
-    else if (function_name == "testRsaEncryption")
-    {
-	result = testRsaEncryption(ctx);
-    }
-    else if (function_name == "printprivatekey")
-    {
-	result = printprivatekey(ctx);
     }
     else
     {

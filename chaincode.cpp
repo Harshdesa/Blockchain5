@@ -46,6 +46,7 @@ using namespace std;
 #define NULL_BREAK(x)   if(!x){break;}
 #endif //NULL_BREAK
 #define MAX_VALUE_SIZE 1024
+#define TEST_KEY "test_house_name"
 
 vector<vector<string>> uploadedSIGNSGDParams;
 vector<vector<string>> uploadedFEDAVGParams;
@@ -180,6 +181,34 @@ std::string getFinalCOMED(shim_ctx_ptr_t ctx){
 	vector<string> result = processCOMED();
         return vectostr(result);
 }
+
+
+std::string putState(std::string test_value, shim_ctx_ptr_t ctx) {
+
+	put_state(TEST_KEY, (uint8_t*)test_value.c_str(), test_value.size(), ctx);
+
+	return "Put State complete";
+}
+
+std::string getState(shim_ctx_ptr_t ctx) {
+
+	char _test_value_buf[128];
+	const char* _test_value;
+	uint32_t ahn_len = -1;
+	get_state(TEST_KEY, (uint8_t*)_test_value_buf, sizeof(_test_value_buf) - 1, &ahn_len, ctx);
+
+	if (ahn_len == 0)
+        {
+            _test_value = "(uninitialized)";
+        }
+        else
+        {
+            _test_value_buf[ahn_len + 1] = '\0';
+            _test_value = _test_value_buf;
+        }
+	std::string result(_test_value);
+	return result;
+}
 // implements chaincode logic for invoke
 int invoke(
     uint8_t* response,
@@ -223,6 +252,15 @@ int invoke(
     else if (function_name == "reset")
     {
 	result = reset(ctx);
+    }
+    else if (function_name == "putState")
+    {
+	std::string testvalue = params[0];
+	result = putState(testvalue, ctx);
+    }
+    else if (function_name == "getState")
+    {
+        result = getState(ctx);
     }
     else
     {
